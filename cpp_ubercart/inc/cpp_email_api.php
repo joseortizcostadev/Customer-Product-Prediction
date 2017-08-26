@@ -39,7 +39,7 @@ class Email
      */
     public function send ()
     {
-        //if(variable_get('email_activation')) {
+        if(variable_get('email_activation')) {
 
             // Check Name
             if (strlen($this->name) < 2) {
@@ -83,7 +83,7 @@ class Email
             } # end if - no validation error
             else
                 var_dump($this->error);
-        //}
+        }
     }
 
     /**
