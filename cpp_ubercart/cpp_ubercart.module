@@ -1,0 +1,342 @@
+<?php
+/**
+ * This module provides all the CPP Ubercart core functions
+ *
+ * This module creates the custom 'hook_cpp_uc_order_comment_evaluation($order_info)' which fires when
+ * a new order is created or saved. '$order_info' contains all the data related to the order
+ * comment including predictions about it which automatically determines if the comment is either a good review or a
+ * bad review for the order completed or updated.
+ *
+ * Custom hook parameter keys:
+ *     'comment_id' =>   The comment id of the order.
+ *     'order_id' =>     The order id.
+ *     'uid' =>          The user id of the user who purchased the order ( if 0, then the user had anonymous role )
+ *     'comment' =>      The comment about this order created by the user at purchase time.
+ *                       Note that this comment is set to be seen by everyone. There are comments which are set to be
+ *                       only seen by the administrator. In future versions of CPP we'll add predictions for this feature.
+ *     'prediction' =>   the prediction about the comment left by the user. Options are: ood review or bad review
+ *                       which determined by implementing artificial intelligence algorithms.
+ *
+ * Usage:
+ *
+ * A good example implementation for this hook in any module would be to check out if a customers are satisfied with the
+ * order purchase or products related to that order based on its comment predictions. e.g:
+ *
+ * // Cpp Hook implementation example.
+ * hook_cpp_uc_order_comment_evaluation($order_info)
+ * {
+ *     $comment_prediction = $order_info['prediction'];
+ *     $uid = $order_info['uid'];
+ *     $user_name = $order_info['primary_name'];
+ *     $user_email = $order_info['primary_email'];
+ *     // the order was made by an authentified user. Note that anonymous users also can make orders in ubercart
+ *     // note that anonymous users also can make orders in ubercart. So, this if statement won't be executed given that case
+ *     if ($uid)
+ *     {
+ *         $user = user_load($uid); // loads user node to get relevant fields such as user email.
+ *         $user_email = $user->mail;
+ *         $user_name = $user->name;
+ *     }
+ *     if ($comment_prediction == 'good review') // good evaluation of your order or products
+ *     {
+ *          // In this example we send email using CPP Email Api but you can use also drupal_send_email function core built API as well
+ *          $customer_email = $user->mail;
+ *          $customer_name = $user->name; // this is actually the customer username.
+ *          $subject = 'Testing cpp email api in CPP custom hook';
+ *          $body = "Dear " . $customer_name . ' I am very happy when my customers are also happy';
+ *          $email = new Email($customer_email, $customer_name, $subject, $body); // creates email object
+ *          $email_sent = $email->send();
+ *          $errors = $email->errors();
+ *          if ($email_sent && !$errors)
+ *              // email was sent to your customer
+ *          else
+ *              // handle errors that are saved in the array $errors.
+ *     }
+ *     else { // bad evaluation of your order or products
+ *          // do whatever you need to promote your product and keep the unsatisfied customer happy.
+ *     }
+ * }
+ *
+ *
+ * The development and maintenance of this module is made by ThinkBinario: thinkbinario.com
+ * @package    Customer Product Predictor
+ * @author     Jose Ortiz <jose@thinkbinario.com>
+ */
+
+/**
+ * Implements hook_menu.
+ * @return mixed : a list of menu items
+ */
+function cpp_ubercart_menu()
+{
+    // Core admin end-point for all the Customer Product Predictor Settings and Configurations in Drupal administration
+    $items['admin/config/customer-product-predictor/cpp-ubercart'] = array(
+        'title' => 'CPP Ubercart Features',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('cpp_ubercart_settings_form'),
+        'access arguments' => array('access administration pages'),
+        'description' => t('CPP Ubercart Features'),
+        'file' => 'cpp_ubercart.admin.inc',
+    );
+    // Core admin end-point for all the Customer Product Predictor Settings and Configurations in Drupal administration
+    $items['admin/config/customer-product-predictor/cpp-ubercart/settings'] = array(
+        'title' => 'CPP Ubercart Settings',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('cpp_ubercart_settings_form'),
+        'access arguments' => array('access administration pages'),
+        'description' => t('CPP Ubercart Settings'),
+        'file' => 'cpp_ubercart.admin.inc',
+        'weight' => 0,
+        'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
+    // Core admin end-point for all the Customer Product Predictor Settings and Configurations in Drupal administration
+    $items['admin/config/customer-product-predictor/cpp-ubercart/reviews'] = array(
+        'title' => 'CPP Ubercart Reviews',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('cpp_ubercart_reviews_form'),
+        'access arguments' => array('access administration pages'),
+        'description' => t('CPP Ubercart Settings'),
+        'file' => 'cpp_ubercart.admin.inc',
+        'weight' => 3,
+        'type' => MENU_LOCAL_TASK,
+    );
+    return $items;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+//                                           CPP_UC Hooks
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Implements hook_uc_order and creates hook_cpp_uc_comment_prediction which is fired when an order is saved and
+ * its parameter contains the following options: order_id, comment_id, uid, comment and comment prediction.
+ * @param $op
+ * @param $arg1
+ * @param $arg2
+ */
+function cpp_ubercart_uc_order($op, &$arg1, $arg2)
+{
+    $order_id = $arg1->order_id;
+    $order_review = CPP_UC_Data_Manager::loadNewOrder($order_id);
+    $order_info = $order_review->cpp_uc_get_product_review_data(); // order comment prediction data
+    switch ($op) // $op options are new, presave, save, load, submit, can_update, update, can_delete, delete, total.
+    {
+        case 'submit': // fires when the order is recently created or saved
+        {
+            module_invoke_all('cpp_uc_order_comment_evaluation', $order_info); // creates CPP hook
+            $message = "The order comment evaluation with order_id: " . $order_info['order_id'] . ' and email ' . $order_info['primary_email'] . ' was created';
+            watchdog('CPP', $message) ;
+            break;
+        }
+        case 'delete':
+        {
+            cpp_ubercart_delete_order_prediction($order_info['comment_id']);
+            break;
+        }
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+//                                           CPP_UC Custom Methods
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @param $header : The header from the table that is loading the data returned from this method
+ * @param $order_by : The field which the data will be sorted on.
+ * @return mixed : all the order product review predictions ordered by header and field.
+ */
+function cpp_ubercart_get_product_review_predictions_with_header ($header, $order_by)
+{
+    $predictions = db_select('cpp_uc_products_review_prediction', 'cprp')
+         ->condition('type', PredictionsDefinitions::EVERYONE_CAN_SEE_REVIEWS, '=')
+         ->extend('PagerDefault') //Pager Extender
+         ->limit(200)    //2 results per page
+        ->extend('TableSort')  //Sorting Extender
+        ->orderByHeader($header)//Field to sort on is picked from
+        ->orderBy($order_by, 'DESC')
+        ->fields('cprp', array(
+            'prid',
+            'comment_id',
+            'type',
+            'prediction',
+            'is_in_training'
+            ))
+        ->execute();
+    return $predictions;
+}
+
+/**
+ * @param $comment_id
+ * @param $products_prediction_data
+ * @return mixed the prediction data comment_id, prediction, accuracy and starts for this review.
+ */
+function cpp_ubercart_get_product_review_prediction($comment_id, $products_prediction_data)
+{
+    foreach ($products_prediction_data as $prediction_data)
+    {
+        if ($comment_id == $prediction_data['comment_id'])
+           return $prediction_data;
+    }
+    return 0;
+}
+
+/**
+ * @param $comment_id
+ * @param $type
+ * @return array the order information that match the parameters given.
+ * Note: If no order is found, the array key 'order_id' and 'uid' will contain value 0
+ */
+function cpp_ubercart_get_order_information($comment_id)
+{
+
+    $order_data = array('order_id' => 0, 'uid' => 0, 'review' => "", 'created' => 0, 'order_status' => 0,
+                        'primary_email' => "", 'primary_name' => "");
+    $order_query = db_select('uc_order_comments', 'cpuc')->fields('cpuc')
+                   ->condition('comment_id', $comment_id, '=')
+                   ->execute();
+
+    while ($order = $order_query->fetchAssoc())
+    {
+        $order_data['order_id'] = $order['order_id'];
+        $order_data['uid'] = $order['uid'];
+        $order_data['review'] = $order['message'];
+        $order_data['created'] = $order['created'];
+        $order_data['order_status'] = $order['order_status'];
+        $primary_info = cpp_ubercart_get_order_primary_info($order['order_id']);
+        $order_data['primary_email'] = $primary_info['primary_email'];
+        $order_data['primary_name'] = $primary_info['primary_name'];
+    }
+    return $order_data;
+
+}
+
+/**
+ * Insert a new order comment evaluation
+ * @param $comment_id
+ * @param $prediction
+ * @return mixed
+ */
+function cpp_ubercart_save_product_review_prediction($comment_id, $prediction)
+{
+    db_insert('cpp_uc_products_review_prediction')->fields(array(
+        'comment_id' => $comment_id,
+        'type' => 1,
+        'prediction' => $prediction,
+        'is_in_training' => 0
+    ))->execute();
+}
+/**
+ * @param $comment_id
+ * @param $prediction
+ * @param $accuracy
+ * @param $stars
+ * @return mixed the number of product reviews predictions updated
+ */
+function cpp_ubercart_update_product_review_prediction($comment_id, $prediction, $is_in_training)
+{
+    $num_updated = db_update('cpp_uc_products_review_prediction')->fields(array(
+                   'prediction' => $prediction,
+                   'is_in_training' => $is_in_training
+    ))->condition('comment_id', $comment_id, '=')->execute();
+    return $num_updated;
+}
+
+/**
+ * @param $order_id
+ * @return array : a list containing all the relevant data for this order by a given order_id.
+ */
+function cpp_ubercart_load_data_by_order($order_id)
+{
+
+    $order = array('order_id' => $order_id, 'uid' => 0,'comment_id' => 0, 'review' => "",
+                   'primary_email' => "", 'primary_name' => "", 'order_status' => 0);
+    $order_query = db_select('uc_order_comments', 'uoc')->fields('uoc', array('message', 'comment_id', 'uid', 'order_id', 'order_status'))
+             ->condition('order_id', $order_id, '=')->execute();
+    while ($tmp_order = $order_query->fetchAssoc())
+    {
+        $order['order_id'] = $tmp_order['order_id'];
+        $order['comment_id'] = $tmp_order['comment_id'];
+        $order['review'] = $tmp_order['message'];
+        $order['uid'] = $tmp_order['uid'];
+        $order['prediction'] = "";
+        $order['order_status'] = $tmp_order['order_status'];
+        if (!$tmp_order['uid']) {
+            $primary_info = cpp_ubercart_get_order_primary_info($order_id);
+            $order['primary_email'] = $primary_info['primary_email'];
+            $order['primary_name'] = $primary_info['primary_name'];
+        }
+    }
+    return $order;
+}
+
+/**
+ * @param $comment_id
+ * @return array :  a list containing all the relevant data for this order by a given comment_id
+ */
+function cpp_ubercart_load_data_by_comment_id($comment_id)
+{
+
+    $order = array('order_id' => 0, 'uid' => 0,'comment_id' => $comment_id, 'review' => "");
+    $order_query = db_select('uc_order_comments', 'uoc')->fields('uoc', array('message', 'order_id', 'uid'))
+        ->condition('comment_id', $comment_id, '=')->execute();
+    while ($tmp_order = $order_query->fetchAssoc())
+    {
+        $order['order_id'] = $tmp_order['order_id'];
+        $order['review'] = $tmp_order['message'];
+        $order['uid'] = $tmp_order['uid'];
+    }
+    return $order;
+}
+
+/**
+ * Deletes a order comment prediction from the cpp database.
+ * Note that this method does not delete the order from uc_orders table,
+ * it only deletes all the data related to this order stored in CPP tables.
+ * @param $comment_id
+ */
+function cpp_ubercart_delete_order_prediction($comment_id)
+{
+    db_delete('cpp_uc_products_review_prediction')->condition('comment_id', $comment_id, '=')->execute();
+}
+
+/**
+ * @param $order_id
+ * @return array : list of primary fields of the order. Those primaries fields are set when the customer does
+ *                 not create an account while buying a product
+ */
+function cpp_ubercart_get_order_primary_info($order_id)
+{
+    $order_info = array();
+    $tmp_order = db_select('uc_orders', 'uo' )->fields('uo', array('primary_email', 'delivery_first_name', 'delivery_last_name'))
+             ->condition('order_id', $order_id, '=')->execute();
+    while ($order = $tmp_order->fetchAssoc())
+    {
+        $order_info['primary_email'] = $order['primary_email'];
+        $order_info['primary_name'] = $order['delivery_first_name'] . ' ' . $order['delivery_last_name'];
+    }
+    return $order_info;
+}
+
+/**
+ *
+ * @param $comment_id
+ * @return mixed : the number of rows with the same comment_id
+ */
+function cpp_ubercart_comment_exist($comment_id)
+{
+    $comment = db_select('cpp_uc_products_review_prediction', 'cpprp')  ->fields('cpprp', array('comment_id'))
+               ->condition('comment_id', $comment_id, '=')->execute();
+    return $comment->rowCount();
+}
+
+
+
+
+
+
+
+
+
+
+
+

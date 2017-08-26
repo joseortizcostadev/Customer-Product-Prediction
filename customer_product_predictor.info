@@ -1,0 +1,15 @@
+name = Customer Product Predictor
+description = Customer Product Predictor provides features to predict which product will be likely bought by a new or existing customer.
+core = 7.x
+version = 7.x-1.0
+package = Customer Product Predictor
+configure = admin/config/configuration/customer-product-predictor
+dependencies[] = ctools
+
+
+; Information added by Drupal.org packaging script on 2017-08-25
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "customer_product_predictor"
+datestamp = "1503634748"
+

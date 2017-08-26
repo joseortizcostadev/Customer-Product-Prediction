@@ -1,0 +1,176 @@
+<?php
+/**
+ * This module provides all the Customer Product Predictor core functions
+ *
+ * The development and maintenance of this module is made by ThinkBinario: thinkbinario.com
+ * @package    Customer Product Predictor
+ * @author     Jose Ortiz <jose@thinkbinario.com>
+ */
+
+require 'config.php';
+
+//----------------------------------------------------------------------------------------------------------------------
+//                                          Drupal Core Hooks
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ *  Implements hook_menu
+ */
+function customer_product_predictor_menu()
+{
+    /* CPP Configuration end-points */
+
+    // Core admin end-point that which call-back method generates all the links to the CPP configuration pages
+    $items['admin/config/customer-product-predictor'] = array(
+        'title' => 'Customer Product Prediction (CPP)',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('customer_product_predictor_settings_form'),
+        'access arguments' => array('access administration pages'),
+        'description' => t('Configure the Customer Product Predictor Module'),
+        'file' => 'customer_product_predictor_settings.admin.inc',
+    );
+    // Core admin end-point for all the Customer Product Predictor Settings and Configurations in Drupal administration
+    $items['admin/config/customer-product-predictor/general-settings'] = array(
+        'title' => 'CPP General Settings',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('customer_product_predictor_general_settings_form'),
+        'access arguments' => array('access administration pages'),
+        'description' => t('Confugure General Settings for Customer Product Predictor Module'),
+        'file' => 'customer_product_predictor_settings.admin.inc',
+    );
+    return $items;
+}
+
+/**
+ * Implements hook_init
+ *
+ */
+function customer_product_predictor_init()
+{
+    customer_product_predictor_update_entities(); // update entities status
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+//                                          CPP Custom functions
+//----------------------------------------------------------------------------------------------------------------------
+
+
+/**
+ * Updates entities in cpp_entities table according to their status.
+ */
+function customer_product_predictor_update_entities()
+{
+    $entities = customer_product_predictor_get_entities();
+    foreach ($entities as $entity) {
+        if (module_exists($entity['entity']) && !$entity['status']) { // module is enabled and status is false
+            customer_product_predictor_update_entity($entity['eid'], 1);
+        } elseif (!module_exists($entity['entity']) && $entity['status']) { // module is disables and status is true
+            customer_product_predictor_update_entity($entity['eid'], 0);
+        }
+    }
+}
+
+/**
+ * @return mixed the entities from cpp_entities table
+ */
+function customer_product_predictor_get_entities()
+{
+    $entities = db_select('cpp_entities', 'cppe')->fields('cppe')->execute()->fetchAll(PDO::FETCH_ASSOC);
+    return $entities;
+}
+
+/**
+ * Updates a entity in cpp_entities table
+ * @param $eid
+ * @param $status
+ */
+function customer_product_predictor_update_entity($eid, $status)
+{
+    db_update('cpp_entities')->fields(array('status' => $status))
+        ->condition('eid', $eid, '=')->execute();
+}
+
+/**
+ * @return array a list of entity targets
+ */
+function customer_product_predictor_get_entity_targets()
+{
+    $targets = array();
+    $entities = customer_product_predictor_get_entities();
+    foreach ($entities as $target) {
+        if ($target['status'])
+            $targets[] = $target['entity'];
+    }
+    return $targets;
+}
+
+/**
+ * @param $entity : e.g cpp_ubercart. Note that $entity must always start with cpp_YOUR_ENTITY
+ * @return int : the entity id related to this entity
+ */
+function customer_product_predictor_get_entity_id($entity)
+{
+    $entity_target = db_select('cpp_entities', 'cppsw')->fields('cppsw', array('eid'))
+        ->condition('entity', $entity, '=')->execute()->fetchAssoc();
+    return $entity_target['eid'];
+}
+
+
+
+/**
+ * @return mixed : the list of CPP semantic words
+ */
+function customer_product_predictor_get_total_number_semantic_words()
+{
+    $semantic_words = db_select('cpp_semantic_words', 'cpp')->fields('cpp',array('semantic_word'))->execute();
+    return $semantic_words->rowCount();
+}
+
+/**
+ * @param $semantic_word
+ * @return bool : TRUE if the word passed as a parameter is a CPP semantic word. Otherwise, returns FALSE
+ */
+function customer_product_predictor_semantic_word_exist($semantic_word)
+{
+    $semantic_words = customer_product_predictor_get_semantic_words();
+    return in_array($semantic_word, $semantic_words);
+}
+
+/**
+* @return mixed : the list of CPP stop words
+*/
+function customer_product_predictor_get_stop_words()
+{
+    $stop_words = db_select('cpp_stop_words', 'cpp')->fields(array('stop_words'))->execute()->fetchCol();
+    return $stop_words;
+}
+
+/**
+ * @param $stop_word
+ * @return bool : TRUE if the word passed as a parameter is a CPP stop word. Otherwise, returns FALSE
+ */
+function customer_product_predictor_stop_word_exist($stop_word)
+{
+    $stop_words = customer_product_predictor_get_stop_words();
+    return in_array($stop_word, $stop_words);
+}
+
+/**
+ * @param $review : the customer review
+ * @return int : the number of semantic words found in the review
+ */
+function customer_product_predictor_review_contains_semantic_words($review, $semantic_words)
+{
+    $negative  = 0;
+    $words = explode(" ", $review); // split string by space delimeter
+    foreach ($words as $word)
+    {
+        $word = trim($word); // make sure that head and trail spaces are removed.
+        if (in_array($word, $semantic_words))  // if semantic word exist in cpp semantic words.
+            $negative++;
+    }
+    return $negative;
+}
+
+
+

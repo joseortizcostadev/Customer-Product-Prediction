@@ -1,0 +1,162 @@
+<?php
+/**
+ * @file
+ *   Customer Product Predictor module install/schema hooks.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function customer_product_predictor_schema() {
+  $schema = array();
+  $schema['cpp_entities'] = array(
+      'description' => 'Table for storing entities/modules compatibles with CPP',
+      'fields' => array(
+        'eid' => array(
+          'description' => 'The entity id',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'entity' => array(
+          'description' => 'The name of the entity',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+        ),
+        'status' => array(
+          'description' => 'The status of this entity -- 0 means not installed -- 1 means installed',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+         ),
+      ),
+      'primary key' => array('eid'),
+  );
+  $schema['cpp_stop_words'] = array(
+    'description' => 'Table for storing stop words that will be ignored for reviews predictions',
+    'fields' => array(
+      'wid' => array(
+        'description' => 'The stop word id',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'stop_word' => array(
+        'description' => 'The entity target or module that contains this stop word. e.g: ubercart',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+       ),
+    ),
+    'primary key' => array('wid'),
+  );
+  $schema['cpp_semantic_words'] = array(
+        'description' => 'Table for storing words with some semantic meaning for reviews predictions',
+        'fields' => array(
+          'swid' => array(
+            'description' => 'The word id',
+            'type' => 'serial',
+            'unsigned' => TRUE,
+            'not null' => TRUE,
+          ),
+          'semantic_word' => array(
+            'description' => 'The word',
+            'type' => 'varchar',
+            'length' => 64,
+            'not null' => TRUE,
+          ),
+        ),
+        'primary key' => array('swid'),
+   );
+   return $schema;
+}
+
+/**
+   Implements hook_install()
+*/
+function customer_product_predictor_install()
+{
+   customer_product_predictor_install_entities();
+   customer_product_predictor_install_semantic_words();
+   customer_product_predictor_install_stop_words();
+}
+function customer_product_predictor_install_entities ()
+{
+     // IMPORTANT:
+     //          1. Every entity/module developed must be inserted in the database with the following configuration
+     //             - entity : the name of the module e.g cpp_MY_MODULE
+     //             - status : 0 since the system still needs to check out if the module is already enabled.
+     //                        CPP automatically will detect if this entity is enabled, and in that case, it will update
+     //                        the status value.
+     //          2. After adding a new entity the N hook update version must be incremented. So, drupal can detect that
+     //             a new database update exists.
+
+     if (db_table_exists('cpp_entities'))
+     {
+         // inserts ubercart entity in cpp_entities table.
+         db_insert('cpp_entities')->fields(array('entity'=>'cpp_ubercart', 'status' => 0))->execute();
+     }
+}
+
+/**
+   Install semantic words in CPP tables
+*/
+function customer_product_predictor_install_semantic_words()
+{
+    if (db_table_exists('cpp_semantic_words'))
+    {
+       $file_path = 'sites/all/modules/customer_product_predictor/cpp_raw_data/negative_words.txt';
+       $handle = fopen($file_path, "r");
+       if ($handle) {
+           while (($word = fgets($handle)) !== false) {
+                if ($word != null && isset($word))
+                {
+                    $word = utf8_encode($word);
+                    db_insert('cpp_semantic_words')->fields(array('semantic_word' => $word))->execute();
+                }
+       }
+       fclose($handle);
+       } else {
+           watchdog('customer_product_predictor', 'Error: semantic words installation failed. Contact CPP support');
+       }
+    }
+}
+
+/**
+   Install stop words in CPP tables
+*/
+function customer_product_predictor_install_stop_words()
+{
+    if (db_table_exists('cpp_stop_words'))
+    {
+        $file_path = 'sites/all/modules/customer_product_predictor/cpp_raw_data/stop_words.txt';
+        $handle = fopen($file_path, "r");
+        if ($handle) {
+            while (($word = fgets($handle)) !== false) {
+                 if ($word != null && isset($word))
+                     db_insert('cpp_stop_words')->fields(array('stop_word' => $word))->execute();
+        }
+        fclose($handle);
+        } else {
+            watchdog('customer_product_predictor', 'Error: stop words installation failed. Contact CPP support');
+        }
+    }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function customer_product_predictor_uninstall() {
+
+    // Delete tables from CPP database created by this module
+    db_drop_table('cpp_entities');
+    db_drop_table('cpp_stop_words');
+    db_drop_table('cpp_semantic_words');
+
+    // Delete related variables all at once.
+    db_delete('variable')
+      ->condition('name', 'customer_product_predictor_%', 'LIKE')
+      ->execute();
+}

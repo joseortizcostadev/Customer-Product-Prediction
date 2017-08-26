@@ -1,0 +1,17 @@
+name = Customer Product Predictor Ubercart
+description = Customer Product Predictor provides product and customer prediction features. Supports Ubercart
+core = 7.x
+version = 7.x-1.0
+package = Customer Product Predictor
+configure = admin/config/configuration/customer-product-predictor/cpp-ubercart
+dependencies[] = customer_product_predictor
+dependencies[] = uc_order
+
+
+
+; Information added by Drupal.org packaging script on 2017-08-25
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "customer_product_predictor"
+datestamp = "1503634748"
+

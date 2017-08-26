@@ -1,0 +1,188 @@
+<?php
+/**
+ * @file
+ *   Customer Product Predictor module install/schema hooks.
+ */
+
+/**
+  * Implements hook_uninstall().
+*/
+
+/**
+ * Implements hook_schema().
+ */
+function cpp_ubercart_schema() {
+  $schema = array();
+  $schema['cpp_uc_products_review_prediction'] = array(
+      'description' => 'Table for storing product review predictions computed by CPP',
+      'fields' => array(
+        'prid' => array(
+          'description' => 'The product review id',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'comment_id' => array(
+          'description' => 'The product review comment id',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+        ),
+        'type' => array(
+          'description' => 'The type of this review -- 0 means everyone can see this comment  -- 1 only admin can see it',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0
+         ),
+        'prediction' => array(
+          'description' => 'The prediction of this review',
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+          'default' => 'NOT SET'
+         ),
+        'is_in_training' => array(
+          'description' => 'If in training 1, otherwise, 0',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 1
+         ),
+      ),
+      'primary key' => array('prid'),
+  );
+  return $schema;
+}
+/**
+  Implements hook_update_N by creating cpp_products_review_predictions table and inserting CPP default values.
+*/
+function cpp_ubercart_update_7005()
+{
+    $schema['cpp_uc_products_review_prediction'] = array(
+         'description' => 'Table for storing product review predictions computed by CPP',
+         'fields' => array(
+           'prid' => array(
+             'description' => 'The product review id',
+             'type' => 'serial',
+             'unsigned' => TRUE,
+             'not null' => TRUE,
+           ),
+           'comment_id' => array(
+             'description' => 'The product review comment id',
+             'type' => 'varchar',
+             'length' => 255,
+             'not null' => TRUE,
+           ),
+           'type' => array(
+             'description' => 'The type of this review -- 0 means only admin can see this comment  -- 1 everyone can see it',
+             'type' => 'int',
+             'unsigned' => TRUE,
+             'not null' => TRUE,
+             'default' => 0
+            ),
+           'prediction' => array(
+             'description' => 'The prediction of this review',
+             'type' => 'varchar',
+             'length' => 64,
+             'not null' => TRUE,
+             'default' => 'NOT SET'
+            ),
+           'is_in_training' => array(
+             'description' => 'If in training 1, otherwise, 0',
+             'type' => 'int',
+             'unsigned' => TRUE,
+             'not null' => TRUE,
+             'default' => 0
+            ),
+         ),
+         'primary key' => array('prid'),
+     );
+     db_drop_table('cpp_uc_products_review_prediction');
+     db_create_table('cpp_uc_products_review_prediction', $schema['cpp_uc_products_review_prediction']);
+     cpp_ubercart_install_existing_comments();
+}
+
+/**
+* Implements hook_install
+*/
+function cpp_ubercart_install()
+{
+   cpp_ubercart_install_existing_comments();
+}
+
+/**
+* Train your existing data for more accurate evaluations. Note that this method won't be executed until
+* there are 10 orders in your system.
+*/
+function cpp_ubercart_install_default_prediction($comment_id, $message, $type, $semantic_words)
+{
+   $review = strtolower($message);
+   $review = preg_replace("/[^A-Za-z ]/", '', $review);
+   $review = explode(" ", $review); // split string by space delimeter
+   $prediction = 'good review';
+   foreach ($review as $word)
+   {
+       $word = trim($word); // make sure that head and trail spaces are removed.
+       if (in_array($word, $semantic_words))  // if semantic word exist in cpp semantic words.
+       {
+           $prediction = 'bad review';
+           break;
+       }
+   }
+   db_insert('cpp_uc_products_review_prediction')->fields(
+            array('comment_id' => $comment_id,
+                  'prediction' => $prediction,
+                  'type' => $type,
+                  'is_in_training' => 1,
+                  ))->execute();
+
+}
+/**
+* Install the training data evaluations in data base.
+*/
+function cpp_ubercart_install_existing_comments()
+{
+
+   $admin_can_only_see_this_comment = 0;
+   $everyone_can_see_this_comment = 1;
+   $semantic_words = cpp_ubercart_get_semantic_words();
+   if (db_table_exists('uc_order_admin_comments') && db_table_exists('uc_order_comments'))
+   {
+
+       $all_orders = db_select('uc_order_comments', 'uoc')->fields('uoc', array('comment_id', 'message'))
+                                ->execute();
+       $num_comments = 0;
+       while ($order = $all_orders->fetchAssoc())
+       {
+          if ($num_comments >= 10) // minimum of 10 or more comments in order to get more accurate comment evaluation.
+               cpp_ubercart_install_default_prediction($order['comment_id'], $order['message'], $everyone_can_see_this_comment, $semantic_words);
+          $num_comments++;
+       }
+   }
+
+}
+
+/**
+ * @return mixed : the list of CPP semantic words
+ */
+function cpp_ubercart_get_semantic_words()
+{
+    $words = array();
+    $semantic_words = db_select('cpp_semantic_words', 'cpp')->fields('cpp',array('semantic_word'))->execute();
+    while ($tmp_word = $semantic_words->fetchAssoc())
+    {
+        $word = trim($tmp_word['semantic_word']);
+        $words[] = $word;
+    }
+    return $words;
+}
+/**
+* Implements hook_uninstall
+*/
+function cpp_ubercart_uninstall() {
+   // Delete related variables all at once.
+       db_delete('variable')
+         ->condition('name', 'cpp_ubercart_%', 'LIKE')
+         ->execute();
+}
