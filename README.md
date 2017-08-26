@@ -27,3 +27,35 @@ For more details, be sure to visit the [What is CPP?](http://www.thinkbinario.co
 * [Installation manual with modules descriotion](http://www.thinkbinario.com/cpp/installation)
 * [Support forums](http://www.thinkbinario.com/cpp/support)
 * [Report a bug or feature](http://drupal.org/project/issues/customer_product_predictor)
+
+## CPP and CPP Ubercart Installation
+
+### Release Info
+
+* Created by: Jose Ortiz founder of [ThinkBinario](www.thinkbinario.com)
+* Created on: 25 Aug 2017 at 04:06 UTC
+* Last updated: 25 Aug 2017 at 04:19 UTC
+* Core compatibility: 7.x
+
+### Release Notes
+* Required
+    - ubercart 7.x-3.10
+    - rules 7.x-2.10
+    - entity 7.x-1.8
+    - views 7.x-3.18
+    - ctools 7.x-1.12
+* Optional
+    - No optional projects
+   
+### Download Instructions
+* You can download CPP modules from the following links.
+    - CPP and CPP Ubercart releases may be downloaded from [Drupal.org](https://www.drupal.org/project/customer_product_predictor) 
+    - CPP and CPP Ubercart releases also may be downloaded directly from [CPP Github repository]() 
+
+### Installation
+After downloading CPP modules from any of the provided links. You need to the costumer_product_predictor folder in the following path /sites/all/modules/ located in your drupal installation folder.
+
+Once the main CPP module is placed on the correct path enable the modules Customer Product Prediction and CPP Ubercart. Remeber to flush caches from drupal and your bronwers after module installation. If everything went as expected, your are all set up
+
+At this point, your data has been already trained (this happens during installation time), and for every new order comment placed by a customer, you'll be able to see its automatic evaluation in CPP Ubercart Featured administration table. Not to mention that you won't be able to see this data until you have at least 10 or more orders in placed in your system. Also, remember that you can implement CPP custom hooks to enhance your CPP experience. 
+
