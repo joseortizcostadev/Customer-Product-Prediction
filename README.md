@@ -32,7 +32,7 @@ For more details, be sure to visit the [What is CPP?](http://www.thinkbinario.co
 
 ### Release Info
 
-* Created by: Jose Ortiz founder of [ThinkBinario](www.thinkbinario.com)
+* Created by: Jose Ortiz founder of [ThinkBinario](http://www.thinkbinario.com)
 * Created on: 25 Aug 2017 at 04:06 UTC
 * Last updated: 25 Aug 2017 at 04:19 UTC
 * Core compatibility: 7.x
