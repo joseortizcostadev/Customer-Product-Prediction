@@ -50,7 +50,7 @@ For more details, be sure to visit the [What is CPP?](http://www.thinkbinario.co
 ### Download Instructions
 * You can download CPP modules from the following links.
     - CPP and CPP Ubercart releases may be downloaded from [Drupal.org](https://www.drupal.org/project/customer_product_predictor) 
-    - CPP and CPP Ubercart releases also may be downloaded directly from [CPP Github repository]() 
+    - CPP and CPP Ubercart releases also may be downloaded directly from [CPP Github repository](https://github.com/joseortizcostadev/Customer-Product-Predictor) 
 
 ### Installation
 After downloading CPP modules from any of the provided links. You need to the costumer_product_predictor folder in the following path /sites/all/modules/ located in your drupal installation folder.
