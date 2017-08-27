@@ -1,4 +1,4 @@
-# Welcome to Customer Product Prediction (CPP)
+# Welcome to Customer Product Predictor (CPP)
 
 This module is an open source contribution to Drupal core and [Drupal.org](https://www.drupal.org) developed by Jose Ortiz <jose@thinkbinario.com>
 
